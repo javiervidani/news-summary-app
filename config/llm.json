@@ -1,0 +1,22 @@
+{
+  "active_model": "mistral",
+  "models": {
+    "mistral": {
+      "type": "local",
+      "endpoint": "http://localhost:11434/api/generate",
+      "model_name": "mistral"
+    },
+    "openai": {
+      "type": "cloud",
+      "endpoint": "https://api.openai.com/v1/chat/completions",
+      "api_key": "${OPENAI_API_KEY}",
+      "model_name": "gpt-4"
+    },
+    "anthropic": {
+      "type": "cloud",
+      "endpoint": "https://api.anthropic.com/v1/messages",
+      "api_key": "${ANTHROPIC_API_KEY}",
+      "model_name": "claude-3"
+    }
+  }
+}

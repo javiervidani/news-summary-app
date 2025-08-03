@@ -1,0 +1,27 @@
+# Core dependencies
+requests>=2.31.0
+feedparser>=6.0.10
+beautifulsoup4>=4.12.0
+schedule>=1.2.0
+
+# Database support (optional)
+psycopg2-binary>=2.9.0
+pgvector>=0.2.0
+sentence-transformers>=2.2.0
+
+# AI/ML processors (optional - install as needed)
+openai>=1.0.0
+
+# Development and utilities
+python-dotenv>=1.0.0
+click>=8.1.0
+
+# Email support
+secure-smtplib>=0.1.1
+
+# Testing (optional)
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# Logging and monitoring (optional)
+colorlog>=6.7.0

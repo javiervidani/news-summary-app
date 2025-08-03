@@ -1,0 +1,178 @@
+# Modular News Summary System (MCP-based)
+
+This instruction file provides a complete explanation of the modular architecture used to build a news summarization and distribution system. The design supports dynamic addition of providers (news sources), processors (summarizers), and delivery interfaces (like Telegram), with minimal code changes. It also supports using PostgreSQL with vector search and can integrate local LLMs like Mistral.
+
+---
+
+## 🧱 Directory Structure
+
+```
+/news-summary-app
+│
+├── config
+│   └── providers.json        # Configuration file for all news sources (APIs, RSS, etc.)
+│   └── processors.json       # Configuration file for processors (model type, prompt logic)
+│   └── interfaces.json       # Configuration for delivery channels (e.g., Telegram)
+│
+├── providers/
+│   └── bbc.py                # Sample provider that fetches and normalizes BBC RSS
+│   └── nyt.py                # Another provider for NYTimes
+│
+├── processors/
+│   └── mistral_summary.py    # Calls a local or remote Mistral model for summarization
+│   └── openai_summary.py     # Uses OpenAI API for summarization
+│
+├── interfaces/
+│   └── telegram.py           # Sends the final summary to Telegram groups or channels
+│   └── email.py              # Sends summaries via email (optional)
+│
+├── core/
+│   └── scheduler.py          # Manages scheduled summary runs (morning, noon, evening)
+│   └── runner.py             # Central runner that loads config, fetches, summarizes, delivers
+│   └── utils.py              # Common helper functions
+│
+├── data/
+│   └── logs/                 # Execution logs
+│   └── vectors/              # Saved embeddings (optional)
+│
+└── main.py                  # Entry point that invokes the runner with CLI options
+```
+
+---
+
+## 🔄 File Relations & Workflow
+
+1. **`main.py`**:
+   - Invokes `runner.py`.
+   - Can be triggered via cron for scheduled runs.
+
+2. **`runner.py`**:
+   - Loads the configuration files from `/config`.
+   - Iterates over all **providers** to fetch fresh data.
+   - Passes the content to a **processor** (like `mistral_summary.py`).
+   - Sends the final output using one or more **interfaces** (Telegram, etc).
+
+3. **Providers (`/providers/*.py`)**:
+   - Each one is a Python module that implements `fetch_articles()` returning normalized dicts:
+     ```python
+     return [
+       {"title": "...", "url": "...", "content": "...", "topic": "health"},
+       ...
+     ]
+     ```
+   - You can add a new one and register it in `providers.json`.
+
+4. **Processors (`/processors/*.py`)**:
+   - Each implements a function `summarize(content: str) -> str`
+   - Can use OpenAI, local LLMs (e.g. Mistral), or custom logic.
+
+5. **Interfaces (`/interfaces/*.py`)**:
+   - Sends the final output to users.
+   - Each module implements `send(summary: str, topic: str)`
+
+---
+
+## 🧠 Mistral Integration (Local LLM)
+
+### Step 1: Download Mistral LLM
+
+Use [TheBloke’s HuggingFace models](https://huggingface.co/TheBloke/Mistral-7B-Instruct-GGUF) or `mistralai`:
+
+```bash
+# Using llamafile
+wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-GGUF/resolve/main/mistral-7b-instruct-v0.1.Q4_K_M.gguf
+```
+
+You can run it locally using:
+```bash
+llamafile mistral-7b-instruct-v0.1.Q4_K_M.gguf --port 11434
+```
+
+Or run with Ollama:
+```bash
+ollama pull mistral
+ollama run mistral
+```
+
+### Step 2: Connect to Your Program
+In `processors/mistral_summary.py`, use HTTP call:
+```python
+import requests
+
+def summarize(text):
+    response = requests.post("http://localhost:11434/api/generate", json={
+        "model": "mistral",
+        "prompt": f"Summarize the following news:
+{text}"
+    })
+    return response.json().get("response", "")
+```
+
+---
+
+## 🗃️ PostgreSQL + VectorDB
+
+To use PostgreSQL and vector search for storing and querying article embeddings:
+
+1. Add `psycopg2`, `pgvector`, `sentence-transformers`:
+```bash
+pip install psycopg2-binary pgvector sentence-transformers
+```
+
+2. Schema suggestion:
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE TABLE articles (
+  id SERIAL PRIMARY KEY,
+  title TEXT,
+  content TEXT,
+  topic TEXT,
+  embedding vector(384)
+);
+```
+
+3. Sample insertion in Python:
+```python
+from sentence_transformers import SentenceTransformer
+import psycopg2
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
+embedding = model.encode("article content")
+
+conn = psycopg2.connect(...)
+cursor = conn.cursor()
+cursor.execute("""
+  INSERT INTO articles (title, content, topic, embedding)
+  VALUES (%s, %s, %s, %s)
+""", (title, content, topic, embedding.tolist()))
+```
+
+---
+
+## ✅ Adding a New Provider
+1. Create a new file in `/providers`, e.g. `reuters.py`
+2. Implement `fetch_articles()`
+3. Register in `config/providers.json`:
+```json
+{
+  "reuters": {
+    "module": "reuters",
+    "type": "rss",
+    "url": "https://feeds.reuters.com/reuters/topNews"
+  }
+}
+```
+
+## ✅ Adding a New Processor
+1. Create a new file in `/processors`, e.g. `cohere_summary.py`
+2. Implement `summarize(content)`
+3. Register in `config/processors.json`
+
+## ✅ Adding a New Delivery Interface
+1. Create a file in `/interfaces`, e.g. `whatsapp.py`
+2. Implement `send(summary, topic)`
+3. Register in `config/interfaces.json`
+
+---
+
+Let me know when you're ready to generate the starter code for Python or PHP.

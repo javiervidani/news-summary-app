@@ -1,0 +1,25 @@
+{
+  "telegram": {
+    "module": "telegram",
+    "type": "messaging",
+    "enabled": true,
+    "config": {
+      "bot_token": "${TELEGRAM_BOT_TOKEN}",
+      "chat_id": "${TELEGRAM_CHAT_ID}",
+      "parse_mode": "Markdown"
+    }
+  },
+  "email": {
+    "module": "email", 
+    "type": "email",
+    "enabled": false,
+    "config": {
+      "smtp_server": "${SMTP_SERVER}",
+      "smtp_port": 587,
+      "username": "${EMAIL_USERNAME}",
+      "password": "${EMAIL_PASSWORD}",
+      "from_email": "${FROM_EMAIL}",
+      "to_emails": ["${TO_EMAIL}"]
+    }
+  }
+}

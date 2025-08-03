@@ -1,0 +1,19 @@
+{
+  "mistral": {
+    "module": "mistral_summary",
+    "type": "local_llm",
+    "endpoint": "http://localhost:11434/api/generate",
+    "model": "mistral",
+    "enabled": true,
+    "max_tokens": 500,
+    "prompt_template": "Summarize the following news articles in a clear and concise manner, focusing on key facts and implications:\n\n{content}\n\nSummary:"
+  },
+  "openai": {
+    "module": "openai_summary", 
+    "type": "api",
+    "model": "gpt-3.5-turbo",
+    "enabled": false,
+    "max_tokens": 300,
+    "prompt_template": "Create a brief summary of these news articles highlighting the most important points:\n\n{content}"
+  }
+}
