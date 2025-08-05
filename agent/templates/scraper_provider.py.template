@@ -1,0 +1,252 @@
+"""
+{provider_name} news scraper provider.
+Fetches articles from {provider_description} using web scraping.
+"""
+
+import logging
+import requests
+import time
+import random
+from typing import List, Dict, Any
+from bs4 import BeautifulSoup
+
+from .base_provider import BaseProvider
+
+
+class {class_name}Provider(BaseProvider):
+    """{provider_name} web scraper provider."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.logger = logging.getLogger(__name__)
+        self.base_url = config.get('url', '{base_url}')
+        self.user_agent = config.get('user_agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36')
+        self.topics = config.get('topics', ['general'])
+        
+        # URL paths for different sections/topics
+        self.section_paths = config.get('section_paths', {
+            'general': '/',
+            'world': '/world',
+            'business': '/business'
+        })
+    
+    def fetch_articles(self) -> List[Dict[str, Any]]:
+        """Fetch articles by scraping {provider_name} website."""
+        all_articles = []
+        
+        try:
+            self.logger.info(f"Scraping articles from {provider_name}")
+            
+            # Loop through configured sections
+            for topic, path in self.section_paths.items():
+                try:
+                    url = f"{self.base_url.rstrip('/')}{path}"
+                    articles = self._scrape_section(url, topic)
+                    all_articles.extend(articles)
+                    
+                    # Add a small delay between requests to be respectful
+                    time.sleep(random.uniform(1.0, 3.0))
+                    
+                except Exception as e:
+                    self.logger.error(f"Error scraping {topic} section: {e}")
+            
+            self.logger.info(f"Successfully scraped {len(all_articles)} articles from {provider_name}")
+            return all_articles
+            
+        except Exception as e:
+            self.logger.error(f"Unexpected error scraping {provider_name}: {e}")
+            return []
+    
+    def _scrape_section(self, url: str, topic: str) -> List[Dict[str, Any]]:
+        """Scrape articles from a section page."""
+        self.logger.info(f"Scraping section: {topic} from {url}")
+        
+        articles = []
+        try:
+            # Make request with a realistic user agent
+            headers = {'User-Agent': self.user_agent}
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            # Parse the HTML
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Find article links on the page
+            article_links = self._extract_article_links(soup)
+            
+            # Process each article
+            for i, article_url in enumerate(article_links[:10]):  # Limit to first 10 articles
+                try:
+                    # Make sure URL is absolute
+                    if article_url.startswith('/'):
+                        article_url = f"{self.base_url.rstrip('/')}{article_url}"
+                        
+                    # Get the full article
+                    article = self._scrape_article(article_url, topic)
+                    if article:
+                        articles.append(article)
+                        
+                    # Add delay between article requests
+                    if i < len(article_links) - 1:
+                        time.sleep(random.uniform(1.0, 2.0))
+                        
+                except Exception as e:
+                    self.logger.warning(f"Error scraping article {article_url}: {e}")
+                    continue
+                    
+            return articles
+            
+        except requests.RequestException as e:
+            self.logger.error(f"Request error for {url}: {e}")
+            return []
+        except Exception as e:
+            self.logger.error(f"Error scraping section {topic}: {e}")
+            return []
+    
+    def _extract_article_links(self, soup: BeautifulSoup) -> List[str]:
+        """
+        Extract article links from the section page.
+        
+        Note: This method should be customized based on the specific website structure.
+        The implementation below provides common patterns that should be adjusted.
+        """
+        links = []
+        
+        # Look for common article link patterns
+        # 1. Find links within article tags
+        for article in soup.find_all('article'):
+            for a in article.find_all('a', href=True):
+                links.append(a['href'])
+                
+        # 2. Find links with common article URL patterns
+        if not links:
+            for a in soup.find_all('a', href=True):
+                href = a['href']
+                # Common patterns in news article URLs
+                if any(x in href for x in ['/article/', '/story/', '/news/', '.html']):
+                    links.append(href)
+        
+        # 3. Find links within common news container classes/IDs
+        if not links:
+            for container in soup.select('.news-item, .article, .story, #main-content, .container'):
+                for a in container.find_all('a', href=True):
+                    links.append(a['href'])
+                    
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_links = []
+        for link in links:
+            if link not in seen:
+                seen.add(link)
+                unique_links.append(link)
+                
+        return unique_links
+    
+    def _scrape_article(self, url: str, topic: str) -> Dict[str, Any]:
+        """Scrape a single article page."""
+        self.logger.debug(f"Scraping article: {url}")
+        
+        try:
+            # Make request
+            headers = {'User-Agent': self.user_agent}
+            response = requests.get(url, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            # Parse the HTML
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract article content
+            title = self._extract_title(soup)
+            content = self._extract_content(soup)
+            
+            # Skip if we couldn't extract the essential content
+            if not title or not content:
+                self.logger.warning(f"Could not extract content from {url}")
+                return None
+                
+            return self.normalize_article(title, content, url, topic)
+            
+        except Exception as e:
+            self.logger.error(f"Error scraping article {url}: {e}")
+            return None
+    
+    def _extract_title(self, soup: BeautifulSoup) -> str:
+        """
+        Extract article title.
+        
+        Note: This method should be customized based on the specific website structure.
+        """
+        # Try different common title selectors
+        title = None
+        
+        # Check for standard heading tags with article/main content classes
+        for selector in ['h1.article-title', 'h1.entry-title', 'h1.headline', 
+                        '.article-header h1', '.post-title', '.story-heading',
+                        'article h1', '.main h1', '.content h1', 'h1']:
+            title_tag = soup.select_one(selector)
+            if title_tag:
+                title = title_tag.text.strip()
+                break
+                
+        # Try open graph meta tag if no title found
+        if not title:
+            og_title = soup.find('meta', property='og:title')
+            if og_title:
+                title = og_title.get('content', '')
+        
+        # Try document title as last resort
+        if not title:
+            title_tag = soup.find('title')
+            if title_tag:
+                title = title_tag.text.strip()
+                
+        return title
+    
+    def _extract_content(self, soup: BeautifulSoup) -> str:
+        """
+        Extract article content.
+        
+        Note: This method should be customized based on the specific website structure.
+        """
+        # Try different common content selectors
+        content = ""
+        
+        # Check for article body using common selectors
+        selectors = [
+            'article', '.article-body', '.article-content', '.story-body',
+            '.post-content', '.entry-content', '.content', '.story', '#article-body',
+            '[itemprop="articleBody"]', '.main-content'
+        ]
+        
+        for selector in selectors:
+            content_div = soup.select_one(selector)
+            if content_div:
+                # Get all paragraphs in the content div
+                paragraphs = content_div.find_all('p')
+                if paragraphs:
+                    content = "\n\n".join([p.text.strip() for p in paragraphs])
+                    break
+                else:
+                    # If no paragraphs, use the full content div text
+                    content = content_div.text.strip()
+                    break
+        
+        return content
+
+
+# Main function for the module
+def fetch_articles() -> List[Dict[str, Any]]:
+    """Main entry point for the {provider_name} provider."""
+    # Default config - will be overridden by runner
+    config = {
+        'url': '{base_url}',
+        'section_paths': {
+            'general': '/',
+            'world': '/world',
+            'business': '/business'
+        },
+        'topics': ['general', 'world', 'business']
+    }
+    
+    provider = {class_name}Provider(config)
+    return provider.fetch_articles()

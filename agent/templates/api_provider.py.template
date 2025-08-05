@@ -1,0 +1,190 @@
+"""
+{provider_name} news API provider.
+Fetches articles from {provider_description} using API.
+"""
+
+import logging
+import requests
+import json
+from typing import List, Dict, Any
+from bs4 import BeautifulSoup
+
+from .base_provider import BaseProvider
+
+
+class {class_name}Provider(BaseProvider):
+    """{provider_name} API provider."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        super().__init__(config)
+        self.logger = logging.getLogger(__name__)
+        self.api_url = config.get('url', '{api_url}')
+        self.api_key = config.get('api_key', '{api_key}')
+        self.topics = config.get('topics', ['general'])
+    
+    def fetch_articles(self) -> List[Dict[str, Any]]:
+        """Fetch articles from {provider_name} API."""
+        articles = []
+        
+        try:
+            self.logger.info(f"Fetching articles from {provider_name} API")
+            
+            # Prepare headers
+            headers = {}
+            if self.api_key:
+                headers['Authorization'] = f'Bearer {self.api_key}'
+                
+            # Make API request
+            response = requests.get(
+                self.api_url, 
+                headers=headers,
+                timeout=30
+            )
+            response.raise_for_status()
+            
+            # Parse JSON response
+            data = response.json()
+            
+            # Extract articles based on API response structure
+            raw_articles = self._extract_articles(data)
+            
+            # Process each article
+            for article in raw_articles:
+                try:
+                    processed = self._process_article(article)
+                    if processed:
+                        articles.append(processed)
+                except Exception as e:
+                    self.logger.warning(f"Error processing {provider_name} article: {e}")
+                    continue
+            
+            self.logger.info(f"Successfully fetched {len(articles)} articles from {provider_name}")
+            return articles
+            
+        except requests.RequestException as e:
+            self.logger.error(f"Error fetching from {provider_name} API: {e}")
+            return []
+        except Exception as e:
+            self.logger.error(f"Unexpected error fetching {provider_name} articles: {e}")
+            return []
+    
+    def _extract_articles(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Extract articles from API response.
+        
+        Note: This method should be customized based on the specific API structure.
+        The default implementation assumes a common structure with articles under 
+        a top-level 'articles' key.
+        """
+        # Default extraction - customize based on API response format
+        if 'articles' in data:
+            return data.get('articles', [])
+        elif 'results' in data:
+            return data.get('results', [])
+        elif 'data' in data and isinstance(data['data'], list):
+            return data.get('data', [])
+        elif isinstance(data, list):
+            return data
+        else:
+            self.logger.warning("Unrecognized API response format")
+            return []
+    
+    def _process_article(self, article: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a single article from the API response."""
+        # Extract fields based on common API response formats
+        # Customize this method for the specific API structure
+        title = article.get('title', article.get('headline', 'Untitled'))
+        
+        # Try different common field names for content
+        content = (article.get('content') or 
+                  article.get('body') or 
+                  article.get('description') or 
+                  article.get('summary') or 
+                  article.get('text', ''))
+        
+        # Clean HTML if present
+        if '<' in content and '>' in content:
+            content = self._clean_html(content)
+        
+        # Get URL
+        url = (article.get('url') or 
+              article.get('link') or 
+              article.get('web_url', ''))
+        
+        # Try to determine topic
+        topic = self._determine_topic(article, url)
+        
+        return self.normalize_article(title, content, url, topic)
+    
+    def _clean_html(self, content: str) -> str:
+        """Remove HTML tags from content."""
+        if not content:
+            return ""
+        
+        try:
+            soup = BeautifulSoup(content, 'html.parser')
+            return soup.get_text().strip()
+        except Exception:
+            return content
+    
+    def _determine_topic(self, article: Dict[str, Any], url: str) -> str:
+        """Determine article topic from metadata or URL."""
+        # First try to get topic from article metadata
+        topic = (article.get('section') or 
+                article.get('category') or 
+                article.get('topic') or
+                article.get('section_name', ''))
+                
+        if topic and isinstance(topic, str):
+            topic = topic.lower()
+            # Map to standard topics
+            if any(t in topic for t in ['business', 'econ', 'market', 'finance']):
+                return 'business'
+            elif any(t in topic for t in ['tech', 'technolog', 'digital']):
+                return 'technology'
+            elif any(t in topic for t in ['politic', 'gov', 'election']):
+                return 'politics'
+            elif any(t in topic for t in ['world', 'global', 'international', 'foreign']):
+                return 'world'
+            elif any(t in topic for t in ['health', 'wellness', 'medical']):
+                return 'health'
+            elif any(t in topic for t in ['sport', 'athlet']):
+                return 'sports'
+            elif any(t in topic for t in ['entertain', 'art', 'movie', 'tv', 'television']):
+                return 'entertainment'
+            else:
+                return topic
+                
+        # If no topic in metadata, try URL
+        url_lower = url.lower()
+        if '/business' in url_lower:
+            return 'business'
+        elif '/technology' in url_lower or '/tech' in url_lower:
+            return 'technology'
+        elif '/politics' in url_lower:
+            return 'politics'
+        elif '/world' in url_lower or '/international' in url_lower:
+            return 'world'
+        elif '/health' in url_lower:
+            return 'health'
+        elif '/sport' in url_lower:
+            return 'sports'
+        elif '/entertainment' in url_lower:
+            return 'entertainment'
+        
+        # Default topic
+        return 'general'
+
+
+# Main function for the module
+def fetch_articles() -> List[Dict[str, Any]]:
+    """Main entry point for the {provider_name} provider."""
+    # Default config - will be overridden by runner
+    config = {
+        'url': '{api_url}',
+        'api_key': '{api_key}',
+        'topics': ['general']
+    }
+    
+    provider = {class_name}Provider(config)
+    return provider.fetch_articles()

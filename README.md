@@ -28,6 +28,8 @@ The MCP server acts as a **controller** and **autonomous agent** that manages an
 - **Multiple News Sources**: BBC, NYT, Reuters, and more via RSS feeds
 - **AI Summarization**: Local models (Mistral via Ollama) or cloud APIs (OpenAI)
 - **Multiple Delivery Channels**: Telegram, Email, and extensible for more
+- **Category-Based Routing**: Send news to different Telegram channels based on categories
+- **Title-Only Mode**: Option to send just article titles instead of full summaries
 - **Scheduled Execution**: Automated runs with cron-like scheduling
 - **Vector Database Support**: PostgreSQL with pgvector for article storage and search
 - **Topic Filtering**: Process specific news categories
@@ -126,6 +128,12 @@ Edit `.env` file with your credentials:
 # Telegram (required for Telegram delivery)
 TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
+
+# Telegram Category Channels (optional)
+TELEGRAM_CHAT_ID_SPORTS=sports_channel_id
+TELEGRAM_CHAT_ID_POLITICS=politics_channel_id
+TELEGRAM_CHAT_ID_TECH=tech_channel_id
+TELEGRAM_TITLE_ONLY=false
 
 # OpenAI (optional, for OpenAI processor)
 OPENAI_API_KEY=your_openai_key
