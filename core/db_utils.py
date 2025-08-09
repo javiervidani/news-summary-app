@@ -1,4 +1,3 @@
-
 """
 Database utility functions for the news summary system.
 Handles connections, queries, and data storage.
@@ -8,7 +7,7 @@ import os
 import logging
 import json
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from datetime import datetime
 
 from . import utils
@@ -74,24 +73,26 @@ def get_schema():
     return db_conf.get("schema", "news_summary")
 
 def ensure_tables_exist():
-    """Ensure all required database tables exist."""
+    """Ensure all required database tables and columns exist (idempotent/migrating)."""
     if not PSYCOPG2_AVAILABLE:
         logger.warning("psycopg2 not available. Skipping database table creation.")
         return False
-        
+
+    conn = None
     try:
         conn = get_connection()
         if not conn:
             return False
-            
+
         schema = get_schema()
         table_name = get_table_name()
-        
+
         with conn.cursor() as cur:
-            # Create the vector extension
+            # Extensions / schema
             cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
-            
-            # Create the articles table
+            cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+
+            # Base table (without assuming new columns already exist)
             cur.execute(f"""
                 CREATE TABLE IF NOT EXISTS {schema}.{table_name} (
                     id SERIAL PRIMARY KEY,
@@ -102,20 +103,39 @@ def ensure_tables_exist():
                     provider TEXT NOT NULL,
                     embedding vector(384),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    processed_at TIMESTAMP,
-                    summary TEXT
+                    processed_at TIMESTAMP
                 )
             """)
-            
-            # Create indexes
+
+            # Introspect existing columns
+            cur.execute(
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_schema = %s AND table_name = %s
+                """,
+                (schema, table_name)
+            )
+            existing_cols = {r[0] for r in cur.fetchall()}
+
+            # Add missing 'summary' column if needed
+            if 'summary' not in existing_cols:
+                logger.info("Adding missing 'summary' column to articles table")
+                cur.execute(f"ALTER TABLE {schema}.{table_name} ADD COLUMN summary TEXT")
+            # Add missing 'telegram_sent_at' column if needed
+            if 'telegram_sent_at' not in existing_cols:
+                logger.info("Adding missing 'telegram_sent_at' column to articles table")
+                cur.execute(f"ALTER TABLE {schema}.{table_name} ADD COLUMN telegram_sent_at TIMESTAMP")
+
+            # Indexes
             cur.execute(f"CREATE INDEX IF NOT EXISTS idx_{table_name}_topic ON {schema}.{table_name}(topic)")
             cur.execute(f"CREATE INDEX IF NOT EXISTS idx_{table_name}_provider ON {schema}.{table_name}(provider)")
             cur.execute(f"CREATE INDEX IF NOT EXISTS idx_{table_name}_created_at ON {schema}.{table_name}(created_at)")
-            
+            cur.execute(f"CREATE INDEX IF NOT EXISTS idx_{table_name}_telegram_sent ON {schema}.{table_name}(telegram_sent_at)")
+
             conn.commit()
             logger.info("Database tables and extensions verified")
             return True
-            
+
     except Exception as e:
         logger.error(f"Error ensuring tables exist: {e}")
         return False
@@ -124,55 +144,63 @@ def ensure_tables_exist():
             conn.close()
 
 def save_articles(articles: List[Dict[str, Any]]) -> bool:
-    """Save articles to the database."""
+    """Save articles to the database.
+
+    On success, mutates each article dict by adding its assigned 'id'.
+    Returns False if database layer unavailable or insertion failed.
+    """
     if not articles:
         return True
-        
+
     if not PSYCOPG2_AVAILABLE:
         logger.warning("psycopg2 not available. Skipping article saving to database.")
         return False
-        
+
+    conn = None
     try:
         conn = get_connection()
         if not conn:
+            logger.error("Database connection not established. Articles not persisted.")
             return False
-            
+
         schema = get_schema()
         table_name = get_table_name()
-        
+
         # Prepare values for insertion
-        values = []
-        for article in articles:
-            values.append((
-                article.get('title', 'Untitled'),
-                article.get('content', ''),
-                article.get('url', ''),
-                article.get('topic', 'general'),
-                article.get('provider', 'unknown'),
-                None,  # embedding (to be added later)
-                datetime.now(),
-                None,  # processed_at
-                None   # summary
-            ))
-        
+        values = [(
+            article.get('title', 'Untitled'),
+            article.get('content', ''),
+            article.get('url', ''),
+            article.get('topic', 'general'),
+            article.get('provider', 'unknown'),
+            None,  # embedding (to be added later)
+            datetime.now(),
+            None,  # processed_at
+            None   # summary
+        ) for article in articles]
+
         with conn.cursor() as cur:
-            # Insert values using execute_values for efficiency
-            execute_values(
-                cur,
-                f"""
-                INSERT INTO {schema}.{table_name} 
+            query = f"""
+                INSERT INTO {schema}.{table_name}
                 (title, content, url, topic, provider, embedding, created_at, processed_at, summary)
                 VALUES %s
-                """,
-                values
-            )
-            
+                RETURNING id
+            """
+            returned_ids = execute_values(cur, query, values, fetch=True)
             conn.commit()
-            logger.info(f"Saved {len(articles)} articles to database")
-            return True
-            
+
+        # Attach IDs back to original article dicts
+        if returned_ids:
+            for article, row in zip(articles, returned_ids):
+                if row and isinstance(row, (list, tuple)):
+                    article['id'] = row[0]
+            logger.info(f"Saved {len(returned_ids)} articles to database (IDs attached)")
+        else:
+            logger.warning("No IDs returned after insertion; summaries will not be persisted later.")
+        return True
+
     except Exception as e:
-        logger.error(f"Error saving articles to database: {e}")
+        logger.error(f"Error saving articles to database: {e}", exc_info=True)
         return False
     finally:
         if conn:
@@ -250,6 +278,50 @@ def update_article_summary(article_id: int, summary: str) -> bool:
     except Exception as e:
         logger.error(f"Error updating article summary: {e}")
         return False
+    finally:
+        if conn:
+            conn.close()
+
+def mark_telegram_sent(article_ids: List[int]) -> None:
+    """Mark given article IDs as sent to Telegram."""
+    if not article_ids or not PSYCOPG2_AVAILABLE:
+        return
+    conn = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return
+        schema = get_schema()
+        table_name = get_table_name()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE {schema}.{table_name} SET telegram_sent_at = NOW() WHERE id = ANY(%s)",
+                (article_ids,)
+            )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Error marking telegram sent: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+def get_already_sent_urls() -> Set[str]:
+    """Return set of URLs already sent to Telegram."""
+    if not PSYCOPG2_AVAILABLE:
+        return set()
+    conn = None
+    try:
+        conn = get_connection()
+        if not conn:
+            return set()
+        schema = get_schema()
+        table_name = get_table_name()
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT url FROM {schema}.{table_name} WHERE telegram_sent_at IS NOT NULL AND url IS NOT NULL AND url <> ''")
+            return {r[0] for r in cur.fetchall()}
+    except Exception as e:
+        logger.error(f"Error fetching sent URLs: {e}")
+        return set()
     finally:
         if conn:
             conn.close()

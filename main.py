@@ -56,6 +56,8 @@ def main():
                        help='Limit the number of articles processed per provider')
     parser.add_argument('--send-telegram', action='store_true',
                        help='Send the summary to Telegram (shortcut for --interfaces telegram)')
+    parser.add_argument('--title-only', action='store_true',
+                       help='Skip LLM summarization and send only article titles as links')
     
     # Database-related options
     parser.add_argument('--save-only', action='store_true',
@@ -108,7 +110,8 @@ def main():
                 processor=args.processor,
                 interfaces=args.interfaces,
                 article_limit=args.limit,
-                save_only=args.save_only
+                save_only=args.save_only,
+                title_only=args.title_only
             )
         
         if success:

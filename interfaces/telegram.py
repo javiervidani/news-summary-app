@@ -126,10 +126,10 @@ class TelegramInterface(BaseInterface):
                     return line.strip()
             # Fallback to first line if no clear title
             return lines[0].strip() if lines else "News Update"
-        
+
         # Telegram has a message limit of 4096 characters
         max_length = 4000  # Leave some buffer
-        
+
         if len(message) > max_length:
             # Truncate message but try to keep it readable
             truncated = message[:max_length-100]
@@ -138,11 +138,11 @@ class TelegramInterface(BaseInterface):
                 message = truncated[:last_sentence+1] + "\n\n[Message truncated...]"
             else:
                 message = truncated + "...\n\n[Message truncated...]"
-        
-        # Add category/topic as prefix if available
+
+        # Add category/topic as prefix if available (single asterisk for bold in legacy Markdown)
         if topic:
             message = f"*{topic.upper()}*\n\n{message}"
-            
+
         return message
     
     def test_connection(self) -> bool:

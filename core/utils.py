@@ -89,22 +89,15 @@ def truncate_content(content: str, max_length: int = 2000) -> str:
 
 
 def format_summary_message(summary: str, articles: List[Dict[str, Any]], topic: str) -> str:
-    """Format the final summary message for delivery."""
+    """Format the final summary message for delivery.
+
+    Modified: removed trailing Sources block per user request.
+    """
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     article_count = len(articles)
-    
     message = f"📰 **News Summary - {topic.title()}**\n"
     message += f"🕐 {timestamp} | 📄 {article_count} articles\n\n"
-    message += f"{summary}\n\n"
-    
-    if articles:
-        message += "**Sources:**\n"
-        for i, article in enumerate(articles[:5], 1):  # Limit to 5 sources
-            if article.get('url'):
-                message += f"{i}. [{article['title'][:50]}...]({article['url']})\n"
-            else:
-                message += f"{i}. {article['title'][:50]}...\n"
-    
+    message += f"{summary}\n"
     return message
 
 
