@@ -4,41 +4,111 @@
     "type": "rss",
     "url": "http://feeds.bbci.co.uk/news/rss.xml",
     "enabled": true,
-    "topics": ["general", "world", "politics"]
+    "topics": [
+      "general",
+      "world",
+      "politics"
+    ]
   },
   "nyt": {
     "module": "nyt",
-    "type": "rss", 
+    "type": "rss",
     "url": "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml",
     "enabled": true,
-    "topics": ["general", "business", "technology"]
+    "topics": [
+      "general",
+      "business",
+      "technology"
+    ]
   },
   "reuters": {
     "module": "reuters",
     "type": "rss",
     "url": "https://feeds.reuters.com/reuters/topNews",
     "enabled": false,
-    "topics": ["business", "world"]
+    "topics": [
+      "business",
+      "world"
+    ]
   },
   "ynet": {
     "module": "ynet",
     "type": "rss",
     "url": "https://www.ynet.co.il/Integration/StoryRss2.xml",
     "enabled": true,
-    "topics": ["general", "israel", "middle_east"]
+    "topics": [
+      "general",
+      "israel",
+      "middle_east"
+    ]
   },
   "walla": {
     "module": "walla",
     "type": "rss",
     "url": "https://rss.walla.co.il/feed/1",
     "enabled": true,
-    "topics": ["general", "israel", "middle_east"]
+    "topics": [
+      "general",
+      "israel",
+      "middle_east"
+    ]
   },
   "channel14": {
     "module": "channel14",
     "type": "rss",
     "url": "https://www.inn.co.il/Rss.aspx",
     "enabled": true,
-    "topics": ["israel", "politics", "middle_east"]
+    "topics": [
+      "israel",
+      "politics",
+      "middle_east"
+    ]
+  },
+  "foxnews": {
+    "enabled": true,
+    "module": "foxnews",
+    "type": "rss",
+    "topics": [
+      "israel",
+      "politics",
+      "middle_east"
+    ],
+    "url": "https://moxie.foxnews.com/google-publisher/latest.xml"
+  },
+  "guardian": {
+    "module": "guardian",
+    "type": "rss",
+    "url": "https://www.theguardian.com/world/rss",
+    "enabled": true,
+    "topics": [
+      "general",
+      "world",
+      "politics"
+    ],
+    "limit": 2
+  },
+  "guardian_world": {
+    "module": "guardian_world",
+    "type": "rss",
+    "url": "https://www.theguardian.com/world/rss",
+    "enabled": true,
+    "topics": [
+      "general",
+      "world",
+      "politics"
+    ],
+    "limit": 2
+  },
+  "aljazeera": {
+    "module": "aljazeera",
+    "type": "rss",
+    "url": "https://www.aljazeera.com/xml/rss/all.xml",
+    "enabled": true,
+    "topics": [
+      "general",
+      "world",
+      "middle_east"
+    ],
+    "limit": 5
   }
 }
