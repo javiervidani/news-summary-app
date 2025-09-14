@@ -15,5 +15,13 @@
     "enabled": false,
     "max_tokens": 300,
     "prompt_template": "Create a brief summary of these news articles highlighting the most important points:\n\n{content}"
+  },
+  "groq": {
+    "module": "groq_summary",
+    "type": "api",
+    "model": "qwen/qwen3-32b",
+    "enabled": true,
+    "max_tokens": 300,
+    "prompt_template": "Create a comprehensive summary of these news articles. Focus on key events, important people and organizations, significant implications, and emerging trends:\n\n{content}\n\nProvide a well-structured summary:"
   }
 }

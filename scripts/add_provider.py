@@ -30,6 +30,8 @@ from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+PRIMARY_TOPIC = "sport"
+
 def fetch_articles() -> List[Dict[str, Any]]:
     """Fetch articles for provider '{name}'."""
     url = "{url}"
@@ -44,7 +46,7 @@ def fetch_articles() -> List[Dict[str, Any]]:
                 "url": entry.get("link"),
                 "content": entry.get("summary") or entry.get("description") or "",
                 "published_at": entry.get("published") or entry.get("updated") or "",
-                "topic": "{primary_topic}",
+                "topic": PRIMARY_TOPIC,
             }})
         except Exception as e:  # defensive
             logger.warning("Error parsing entry: %s", e)
@@ -234,6 +236,52 @@ def non_interactive_collect(args):
     }
 
 
+def clean_llm_code(raw: str, name: str, url: str, primary_topic: str) -> str:
+    """Strip markdown fences and fallback if no fetch_articles found."""
+    if not raw:
+        return ""
+    lines = raw.strip().splitlines()
+    code_lines = []
+    in_block = False
+    for ln in lines:
+        t = ln.strip()
+        if t.startswith("```"):
+            if in_block:
+                in_block = False
+            else:
+                if "python" in t.lower() or t == "```":
+                    in_block = True
+            continue
+        if in_block:
+            code_lines.append(ln)
+    candidate = "\n".join(code_lines).strip() if code_lines else "\n".join(
+        [l for l in lines if not l.lower().startswith("here")])
+    if "def fetch_articles" not in candidate:
+        candidate += f"""
+
+import logging, feedparser
+from typing import List, Dict, Any
+logger = logging.getLogger(__name__)
+FEED_URL = "{url}"
+PRIMARY_TOPIC = "{primary_topic}"
+
+def fetch_articles() -> List[Dict[str, Any]]:
+    logger.info("Fetching {name} RSS from %s", FEED_URL)
+    d = feedparser.parse(FEED_URL)
+    articles: List[Dict[str, Any]] = []
+    for entry in d.entries or []:
+        articles.append({{
+            "title": (entry.get("title") or "").strip(),
+            "url": entry.get("link"),
+            "content": entry.get("summary") or entry.get("description") or "",
+            "published_at": entry.get("published") or entry.get("updated") or "",
+            "topic": PRIMARY_TOPIC,
+        }})
+    return articles
+"""
+    return candidate.strip()
+
+
 def main():
     args = parse_args()
     data = non_interactive_collect(args) if args.non_interactive else interactive_collect()
@@ -264,7 +312,9 @@ def main():
     # Generate code
     code = None
     if use_llm:
-        code = generate_with_llm(name, url, topics, args.model, args.llm_provider)
+        raw = generate_with_llm(name, url, topics, args.model, args.llm_provider)
+        if raw:
+            code = clean_llm_code(raw, name, url, topics[0] if topics else "general")
     if not code:
         code = build_basic_code(name, url, topics, limit)
 

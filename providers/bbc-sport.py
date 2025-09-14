@@ -1,4 +1,4 @@
-"""Provider for guardian_world"""
+"""Provider for bbc-sport"""
 import logging
 import feedparser
 from typing import List, Dict, Any
@@ -8,13 +8,13 @@ logger = logging.getLogger(__name__)
 PRIMARY_TOPIC = "sport"
 
 def fetch_articles() -> List[Dict[str, Any]]:
-    """Fetch articles for provider 'guardian_world'."""
-    url = "https://www.theguardian.com/world/rss"
-    logger.info("Fetching guardian_world RSS from %s", url)
+    """Fetch articles for provider 'bbc-sport'."""
+    url = "https://feeds.bbci.co.uk/sport/rss.xml"
+    logger.info("Fetching bbc-sport RSS from %s", url)
     d = feedparser.parse(url)
     entries = d.entries or []
     articles: List[Dict[str, Any]] = []
-    for entry in entries[:2]:
+    for entry in entries:
         try:
             articles.append({
                 "title": (entry.get("title") or "").strip(),
@@ -26,5 +26,5 @@ def fetch_articles() -> List[Dict[str, Any]]:
         except Exception as e:  # defensive
             logger.warning("Error parsing entry: %s", e)
             continue
-    logger.info("Successfully fetched %d articles from guardian_world", len(articles))
+    logger.info("Successfully fetched %d articles from bbc-sport", len(articles))
     return articles

@@ -7,7 +7,9 @@
     "topics": [
       "general",
       "world",
-      "politics"
+      "politics",
+      "sport",
+      "technology"
     ]
   },
   "nyt": {
@@ -18,7 +20,8 @@
     "topics": [
       "general",
       "business",
-      "technology"
+      "technology",
+      "sport"
     ]
   },
   "reuters": {
@@ -28,7 +31,9 @@
     "enabled": false,
     "topics": [
       "business",
-      "world"
+      "world",
+      "sport",
+      "technology"
     ]
   },
   "ynet": {
@@ -39,7 +44,9 @@
     "topics": [
       "general",
       "israel",
-      "middle_east"
+      "middle_east",
+      "sport",
+      "technology"
     ]
   },
   "walla": {
@@ -50,7 +57,9 @@
     "topics": [
       "general",
       "israel",
-      "middle_east"
+      "middle_east",
+      "sport",
+      "technology"
     ]
   },
   "channel14": {
@@ -61,19 +70,10 @@
     "topics": [
       "israel",
       "politics",
-      "middle_east"
+      "middle_east",
+      "sport",
+      "technology"
     ]
-  },
-  "foxnews": {
-    "enabled": true,
-    "module": "foxnews",
-    "type": "rss",
-    "topics": [
-      "israel",
-      "politics",
-      "middle_east"
-    ],
-    "url": "https://moxie.foxnews.com/google-publisher/latest.xml"
   },
   "guardian": {
     "module": "guardian",
@@ -83,7 +83,9 @@
     "topics": [
       "general",
       "world",
-      "politics"
+      "politics",
+      "sport",
+      "technology"
     ],
     "limit": 2
   },
@@ -95,7 +97,9 @@
     "topics": [
       "general",
       "world",
-      "politics"
+      "politics",
+      "sport",
+      "technology"
     ],
     "limit": 2
   },
@@ -107,8 +111,44 @@
     "topics": [
       "general",
       "world",
-      "middle_east"
+      "middle_east",
+      "sport",
+      "technology"
     ],
     "limit": 5
+  },
+  "one": {
+    "module": "one",
+    "type": "rss",
+    "url": "https://www.one.co.il/cat/coop/xml/rss/newsfeed.aspx",
+    "enabled": true,
+    "topics": [
+      "general",
+      "world",
+      "sport"
+    ],
+    "limit": 5
+  },
+  "foxnews": {
+    "module": "foxnews",
+    "type": "rss",
+    "url": "https://moxie.foxnews.com/google-publisher/sports.xml",
+    "enabled": true,
+    "topics": [
+      "israel",
+      "politics",
+      "middle_east",
+      "sport",
+      "technology"
+    ]
+  },
+  "bbc-sport": {
+    "module": "bbc-sport",
+    "type": "rss",
+    "url": "https://feeds.bbci.co.uk/sport/rss.xml",
+    "enabled": true,
+    "topics": [
+      "sport"
+    ]
   }
 }

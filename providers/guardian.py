@@ -5,6 +5,8 @@ from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+PRIMARY_TOPIC = "sport"
+
 def fetch_articles() -> List[Dict[str, Any]]:
     """Fetch articles for provider 'guardian'."""
     url = "https://www.theguardian.com/world/rss"
@@ -19,7 +21,7 @@ def fetch_articles() -> List[Dict[str, Any]]:
                 "url": entry.get("link"),
                 "content": entry.get("summary") or entry.get("description") or "",
                 "published_at": entry.get("published") or entry.get("updated") or "",
-                "topic": "general",
+                "topic": PRIMARY_TOPIC,
             })
         except Exception as e:  # defensive
             logger.warning("Error parsing entry: %s", e)

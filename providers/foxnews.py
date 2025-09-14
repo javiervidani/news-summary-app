@@ -1,30 +1,30 @@
-# Auto-generated Fox News provider module
+"""Provider for foxnews"""
 import logging
 import feedparser
+from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-def fetch(config, topic=None, limit=None):
-    url = config["url"]
-    logger.info(f"Fetching {{config.get('name','foxnews')}} RSS from {{url}}")
-    d = feedparser.parse(url)
-    items = d.entries
-    lim = limit or config.get("limit")
-    if lim:
-        items = items[:lim]
-    articles = []
-    for entry in items:
-        articles.append({
-            "title": entry.get("title","").strip(),
-            "url": entry.get("link"),
-            "content": entry.get("summary","") or "",
-            "published_at": entry.get("published",""),
-            "provider": "foxnews",
-            "topic": topic or config.get("topic") or "general",
-            "raw": entry
-        })
-    logger.info(f"Successfully fetched {{len(articles)}} articles from foxnews")
-    return articles
+FEED_URL = "https://moxie.foxnews.com/google-publisher/sports.xml"  # was latest.xml
+PRIMARY_TOPIC = "sport"
 
-def fetch_articles(config, topic=None, limit=None):
-    return fetch(config, topic, limit)
+def fetch_articles() -> List[Dict[str, Any]]:
+    """Fetch articles from Fox News Sports feed."""
+    logger.info("Fetching foxnews RSS from %s", FEED_URL)
+    d = feedparser.parse(FEED_URL)
+    entries = d.entries or []
+    articles: List[Dict[str, Any]] = []
+    for entry in entries:
+        try:
+            articles.append({
+                "title": (entry.get("title") or "").strip(),
+                "url": entry.get("link"),
+                "content": entry.get("summary") or entry.get("description") or "",
+                "published_at": entry.get("published") or entry.get("updated") or "",
+                "topic": PRIMARY_TOPIC,
+            })
+        except Exception as e:
+            logger.warning("Error parsing entry: %s", e)
+            continue
+    logger.info("Successfully fetched %d articles from foxnews (sports)", len(articles))
+    return articles

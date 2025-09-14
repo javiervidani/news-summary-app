@@ -41,6 +41,8 @@ def main():
                        help='Topics to process (default: general)')
     parser.add_argument('--providers', nargs='+', 
                        help='Specific providers to use (default: all enabled)')
+    parser.add_argument('--exclude-providers', nargs='+',
+                       help='Providers to explicitly exclude (applied after --providers filtering)')
     parser.add_argument('--processor', default='mistral',
                        help='Processor to use for summarization (default: mistral)')
     parser.add_argument('--interfaces', nargs='+',
@@ -58,6 +60,8 @@ def main():
                        help='Send the summary to Telegram (shortcut for --interfaces telegram)')
     parser.add_argument('--title-only', action='store_true',
                        help='Skip LLM summarization and send only article titles as links')
+    parser.add_argument('--title-only-n-description', action='store_true',
+                       help='Skip LLM summarization and send titles plus short description lines')
     
     # Database-related options
     parser.add_argument('--save-only', action='store_true',
@@ -76,6 +80,8 @@ def main():
     logger.info("Starting News Summary System")
     logger.info(f"Topics: {args.topics}")
     logger.info(f"Processor: {args.processor}")
+    if args.exclude_providers:
+        logger.info(f"Excluding providers: {', '.join(args.exclude_providers)}")
     
     # Handle the --send-telegram shortcut
     if args.send_telegram:
@@ -111,7 +117,9 @@ def main():
                 interfaces=args.interfaces,
                 article_limit=args.limit,
                 save_only=args.save_only,
-                title_only=args.title_only
+                title_only=args.title_only or args.title_only_n_description,
+                title_only_with_description=args.title_only_n_description,
+                exclude_providers=args.exclude_providers
             )
         
         if success:

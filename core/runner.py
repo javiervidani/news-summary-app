@@ -16,6 +16,8 @@ from .utils import (
 )
 from . import db_utils
 
+MAX_MESSAGE_LENGTH = 3900  # safe buffer under Telegram 4096 char limit
+
 
 class NewsRunner:
     """Main orchestrator for the news summary system."""
@@ -54,10 +56,13 @@ class NewsRunner:
             return None
     
     def _fetch_articles(self, provider_names: Optional[List[str]] = None, 
-                       topics: List[str] = None, article_limit: int = None) -> List[Dict[str, Any]]:
+                       topics: List[str] = None, article_limit: int = None, exclude: Optional[List[str]] = None) -> List[Dict[str, Any]]:
         """Fetch articles from specified providers."""
         all_articles = []
         providers_to_use = provider_names or list(self.providers_config.keys())
+        if exclude:
+            excl = {p.lower() for p in exclude}
+            providers_to_use = [p for p in providers_to_use if p.lower() not in excl]
         
         for provider_name in providers_to_use:
             if provider_name not in self.providers_config:
@@ -151,35 +156,86 @@ class NewsRunner:
     
     def _deliver_summary(self, summary: str, articles: List[Dict[str, Any]], 
                         topic: str, interface_names: Optional[List[str]] = None,
-                        title_only: bool = False, processor_mode: bool = False):
+                        title_only: bool = False, processor_mode: bool = False,
+                        title_only_with_description: bool = False):
         """Deliver summary through specified interfaces.
 
         title_only: if True, summary already contains bullet list links; do not append Sources block.
         processor_mode: if True, build bullet list of article titles with (source) link and ignore raw LLM text.
+        title_only_with_description: if True, summary is bullet list titles + short descriptions.
         """
         interfaces_to_use = interface_names or list(self.interfaces_config.keys())
 
-        # Build message based on mode
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        if title_only:
-            # Keep existing header + article count, omit Sources
+
+        # Decide header based on mode (avoid calling it "News Summary" when we are not summarizing)
+        if processor_mode:
+            base_header = f"📰 **News Summary - {topic.title()}**\n🕐 {timestamp}"
+        elif title_only_with_description or title_only:
+            base_header = f"📰 **{topic.title()} Articles**\n🕐 {timestamp}"
+        else:  # fallback
+            base_header = f"📰 **News Summary - {topic.title()}**\n🕐 {timestamp}"
+
+        # Build body according to mode
+        if title_only_with_description:
             article_count = len(articles)
-            message = f"📰 **News Summary - {topic.title()}**\n🕐 {timestamp} | 📄 {article_count} articles\n\n{summary}\n"
+            header = f"{base_header} | 📄 {article_count} articles"
+            body = summary.strip()
+        elif title_only:
+            article_count = len(articles)
+            header = f"{base_header} | 📄 {article_count} articles"
+            body = summary.strip()
         elif processor_mode:
-            # Custom structure without article count; bullet list of titles with (source) link
+            # Build bullet list (source links) from articles ignoring provided summary
             bullet_lines = []
             for a in articles:
-                title = a.get('title', 'Untitled')
+                title_txt = a.get('title', 'Untitled')
                 url = a.get('url', '')
                 if url:
-                    bullet_lines.append(f"• {title} ([source]({url}))")
+                    bullet_lines.append(f"• {title_txt} ([source]({url}))")
                 else:
-                    bullet_lines.append(f"• {title}")
-            bullets = '\n'.join(bullet_lines)
-            message = f"📰 **News Summary - {topic.title()}**\n🕐 {timestamp} \n\n{bullets}\n"
+                    bullet_lines.append(f"• {title_txt}")
+            body = '\n'.join(bullet_lines)
+            header = base_header
         else:
-            # Fallback to original formatting
-            message = format_summary_message(summary, articles, topic)
+            # Original formatting path
+            full_msg = format_summary_message(summary, articles, topic)
+            # split header/body heuristically (first line header assumption)
+            header, body = full_msg.split('\n', 1) if '\n' in full_msg else (full_msg, '')
+            body = body.strip()
+
+        # Chunking logic (do not split single article / bullet). Bullets start with '•' or blank lines separate sections.
+        def split_body(h: str, b: str) -> List[str]:
+            if not b:
+                return [h]
+            lines = b.splitlines()
+            chunks = []
+            current: List[str] = []
+            for line in lines:
+                prospective = '\n'.join(current + [line])
+                # +2 for spacing between header and body
+                if len(h) + 2 + len(prospective) > MAX_MESSAGE_LENGTH and current:
+                    chunks.append('\n'.join(current))
+                    current = [line]
+                else:
+                    current.append(line)
+            if current:
+                chunks.append('\n'.join(current))
+            return [h + "\n\n" + c for c in chunks] if chunks else [h]
+
+        messages = split_body(header, body)
+        total = len(messages)
+        if total > 1:
+            for idx in range(total):
+                # Append continuation marker except maybe first
+                if idx == 0:
+                    continue  # keep first as-is
+                # Split existing header from body to re-add continuation note
+                parts = messages[idx].split('\n\n', 1)
+                hdr = parts[0]
+                body_part = parts[1] if len(parts) > 1 else ''
+                hdr += f" (part {idx+1}/{total})"
+                messages[idx] = hdr + "\n\n" + body_part
 
         for interface_name in interfaces_to_use:
             if interface_name not in self.interfaces_config:
@@ -190,28 +246,33 @@ class NewsRunner:
             if not interface_module:
                 continue
             try:
-                if self.dry_run:
-                    self.logger.info(f"[DRY RUN] Would send via {interface_name}:")
-                    self.logger.info(f"Message preview: {message[:200]}...")
-                else:
-                    self.logger.info(f"Sending summary via {interface_name}")
-                    interface_module.send(message, topic, interface_config)
-                    self.logger.info(f"Summary sent successfully via {interface_name}")
+                for msg in messages:
+                    if self.dry_run:
+                        self.logger.info(f"[DRY RUN] Would send via {interface_name} (len={len(msg)}):")
+                        self.logger.info(f"Message preview: {msg[:200]}...")
+                    else:
+                        self.logger.info(f"Sending message chunk via {interface_name} (len={len(msg)})")
+                        interface_module.send(msg, topic, interface_config)
+                if not self.dry_run:
+                    self.logger.info(f"All {total} message chunk(s) sent via {interface_name}")
             except Exception as e:
                 self.logger.error(f"Error sending via {interface_name}: {e}", exc_info=True)
 
     def run(self, topics: List[str] = None, providers: List[str] = None,
             processor: str = "mistral", interfaces: List[str] = None,
-            article_limit: int = None, save_only: bool = False, title_only: bool = False) -> bool:
+            article_limit: int = None, save_only: bool = False, title_only: bool = False,
+            exclude_providers: Optional[List[str]] = None, title_only_with_description: bool = False) -> bool:
         """Run the complete news summary pipeline.
 
         title_only: when True, skip processor and send only article titles as Telegram-compatible links.
+        title_only_with_description: like title_only but include short article description/summary snippet.
+        exclude_providers: providers to omit even if present/enabled.
         """
         try:
             topics = topics or ["general"]
 
             # Step 1: Fetch articles
-            articles = self._fetch_articles(providers, topics, article_limit)
+            articles = self._fetch_articles(providers, topics, article_limit, exclude=exclude_providers)
 
             if not articles:
                 self.logger.warning("No articles fetched. Exiting.")
@@ -222,8 +283,8 @@ class NewsRunner:
             db_save_result = db_utils.save_articles(articles)
             if not db_save_result:
                 self.logger.error("Failed to persist articles to database.")
-                if save_only or title_only:
-                    return False  # Persistence required for these modes
+                if save_only or title_only or title_only_with_description:
+                    return False
                 else:
                     self.logger.warning("Continuing without DB persistence; summaries will not be queryable later.")
 
@@ -232,33 +293,64 @@ class NewsRunner:
                 self.logger.info("Save-only mode. Skipping processing and delivery.")
                 return db_save_result
 
-            # Title-only mode: skip LLM processing, group and send
-            if title_only:
-                self.logger.info("Title-only mode enabled: skipping summarization and sending titles with links")
+            # Title-only with description mode
+            if title_only_with_description:
+                self.logger.info("Title-only-with-description mode enabled: skipping summarization and sending titles with short descriptions")
                 sent_urls = db_utils.get_already_sent_urls()
                 if sent_urls:
                     self.logger.info(f"Found {len(sent_urls)} previously sent article URLs; filtering duplicates")
-                # Group articles by topic
                 articles_by_topic = {}
                 for article in articles:
                     if article.get('url') and article['url'] in sent_urls:
-                        continue  # skip already sent
+                        continue
                     article_topic = article.get('topic', 'general')
                     articles_by_topic.setdefault(article_topic, []).append(article)
-
-                # Nothing new
                 if not any(articles_by_topic.values()):
                     self.logger.info("No new articles to send (all already sent).")
                     return True
-
                 sent_article_ids = []
                 for topic, topic_articles in articles_by_topic.items():
                     if topic.lower() not in [t.lower() for t in topics]:
                         continue
                     if not topic_articles:
                         continue
+                    lines = []
+                    for a in topic_articles:
+                        title = a.get('title', 'Untitled')
+                        url = a.get('url', '')
+                        desc = (a.get('content') or '').strip().split('\n')[0][:160].strip()
+                        if url:
+                            lines.append(f"• [{title}]({url})\n  - {desc}" if desc else f"• [{title}]({url})")
+                        else:
+                            lines.append(f"• {title}\n  - {desc}" if desc else f"• {title}")
+                        if a.get('id'):
+                            sent_article_ids.append(a['id'])
+                    summary_text = '\n'.join(lines)
+                    self._deliver_summary(summary_text, topic_articles, topic, interfaces, title_only_with_description=True)
+                db_utils.mark_telegram_sent(sent_article_ids)
+                return True
 
-                    # Build a faux summary consisting of bullet list (Telegram Markdown link format)
+            # Existing title-only mode
+            if title_only:
+                self.logger.info("Title-only mode enabled: skipping summarization and sending titles with links")
+                sent_urls = db_utils.get_already_sent_urls()
+                if sent_urls:
+                    self.logger.info(f"Found {len(sent_urls)} previously sent article URLs; filtering duplicates")
+                articles_by_topic = {}
+                for article in articles:
+                    if article.get('url') and article['url'] in sent_urls:
+                        continue
+                    article_topic = article.get('topic', 'general')
+                    articles_by_topic.setdefault(article_topic, []).append(article)
+                if not any(articles_by_topic.values()):
+                    self.logger.info("No new articles to send (all already sent).")
+                    return True
+                sent_article_ids = []
+                for topic, topic_articles in articles_by_topic.items():
+                    if topic.lower() not in [t.lower() for t in topics]:
+                        continue
+                    if not topic_articles:
+                        continue
                     lines = []
                     for a in topic_articles:
                         title = a.get('title', 'Untitled')
@@ -270,10 +362,7 @@ class NewsRunner:
                         if a.get('id'):
                             sent_article_ids.append(a['id'])
                     summary_text = '\n'.join(lines)
-                    # Deliver
                     self._deliver_summary(summary_text, topic_articles, topic, interfaces, title_only=True)
-
-                # Mark all sent
                 db_utils.mark_telegram_sent(sent_article_ids)
                 return True
 

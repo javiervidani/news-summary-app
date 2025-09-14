@@ -17,6 +17,12 @@
       "endpoint": "https://api.anthropic.com/v1/messages",
       "api_key": "${ANTHROPIC_API_KEY}",
       "model_name": "claude-3"
+    },
+    "groq": {
+      "type": "cloud",
+      "endpoint": "https://api.groq.com/openai/v1/chat/completions",
+      "api_key": "${GROQ_API_KEY}",
+      "model_name": "qwen/qwen3-32b"
     }
   }
 }
