@@ -1,0 +1,36 @@
+name: Fetch News Articles
+
+on:
+  schedule:
+    # Run every 2 hours (at minute 0 of hour 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, and 22)
+    - cron: '0 */2 * * *'
+  workflow_dispatch:
+
+jobs:
+  fetch-articles:
+    runs-on: debian-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install feedparser
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      
+      - name: Fetch news articles
+        run: |
+          python -m providers.yahoofinance
+          # Add any other news providers or processing logic here
+      # Optional: Add steps to store or process the fetched articles
+      # For example, you might want to:
+      # - Save to a database
+      # - Commit new articles to the repository
+      # - Send notifications

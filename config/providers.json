@@ -150,5 +150,15 @@
     "topics": [
       "sport"
     ]
+  },
+  "yahoofinance": {
+    "module": "yahoofinance",
+    "type": "rss",
+    "url": "https://finance.yahoo.com/news/rssindex",
+    "enabled": true,
+    "topics": [
+      "finance",
+      "business"
+    ]
   }
 }
