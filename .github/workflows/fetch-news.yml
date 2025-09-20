@@ -27,7 +27,7 @@ jobs:
       
       - name: Fetch news articles
         run: |
-          python -m providers.yahoofinance
+          python -m --providers yahoofinance --topics finance --title-only --processor groq
           # Add any other news providers or processing logic here
       # Optional: Add steps to store or process the fetched articles
       # For example, you might want to:
