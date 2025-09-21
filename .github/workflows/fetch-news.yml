@@ -1,9 +1,9 @@
 name: Fetch News Articles
 
 on:
-  schedule:
+  # schedule:
     # Run every 2 hours (at minute 0 of hour 0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, and 22)
-    - cron: '0 */2 * * *'
+    # - cron: '0 */2 * * *'
   workflow_dispatch:
 
 jobs:
